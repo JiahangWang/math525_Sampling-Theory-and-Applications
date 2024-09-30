@@ -1,0 +1,59 @@
+CODE_N
+市政代码。
+COMMUNE
+市政名称。
+BVQ_N
+该市政所属的日常生活流域代码。
+POPSDC99
+居民人口数量。
+LOG
+住宅数量。
+LOGVAC
+空置住宅数量。
+STRATLOG
+一个四模态变量，如果市政拥有少于100个住宅，则等于1；如果市政拥有100至299个住宅，则等于2；如果市政拥有300至999个住宅，则等于3；如果市政拥有1000个或更多住宅，则等于4。
+surf_m2
+以平方米为单位的表面积。
+lat_centre
+中心点的地理纬度。
+lon_centre
+中心点的地理经度。
+
+画图代码：
+
+mean_estimates_df <- data.frame(
+  values = c(mean_estimates_Srswor, mean_estimates_Bernoulli, mean_estimates_Systematic),
+  method = factor(rep(c("SRSWOR", "Bernoulli", "Systematic"), each = num_simulations))
+)
+
+ggplot(mean_estimates_df, aes(x = values, fill = method)) +
+  geom_density(alpha = 0.6) + 
+  labs(title = "Density Plot of Mean Estimates",
+       x = "Mean Estimate",
+       y = "Density") +
+  scale_fill_brewer(palette = "Set1") + 
+  theme_minimal() +
+  theme(legend.title = element_blank()) 
+  
+  三种方法：
+  
+  set.seed(123) # Ensure reproducibility
+
+# SRSWOR
+sample_Srswor <- sample(data$more_than_10, size = 100, replace = FALSE)
+
+# Bernoulli Sampling
+prob <- 0.2  # Probability of selection to aim for an expected size of 100
+sample_Bernoulli <- data$more_than_10[sample(c(TRUE, FALSE), size = length(data$Vacant_rate), replace = TRUE, prob = c(prob, 1-prob))]
+
+# Systematic Sampling
+n <- length(data$more_than_10)
+k <- n / 100 # Sampling interval
+start <- sample(1:k, 1) # Random start within the first k items
+sample_Systematic <- data$more_than_10[seq(from = start, to = n, by = k)]
+sample_Systematic <- sample_Systematic[1:100] # Ensure the sample size is exactly 100
+
+# view first 6 elements
+mean(sample_Srswor)
+mean(sample_Bernoulli)
+mean(sample_Systematic)

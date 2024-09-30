@@ -1,0 +1,328 @@
+---
+title: "Math525-A2-Coding"
+author: "Jiahang Wang"
+output: pdf_document
+---
+
+```{r}
+library(readr)
+library(ggplot2)
+```
+
+# Question 1
+```{r}
+# load data
+data <- read.csv("data.csv")
+
+head(data)
+```
+## meaning of the covariates:
+
+- Unnamed: 0: An index or identifier for each row.
+- X: Appears to be another form of index or identifier.
+- CODE_N: Municipality code.
+- COMMUNE: Name of the municipality.
+- BVQ_N: Code for the Daily Life Basin the municipality belongs to.
+- POPSDC99: Number of inhabitants.  
+- LOG: Number of dwellings.
+- LOGVAC: Number of vacant dwellings.
+- STRATLOG: A classification based on the number of dwellings, with four categories reflecting different ranges of dwelling counts.
+- surf_m2: Surface area in square meters.
+- lat_centre: Geographical latitude of the center of the municipality.
+- lon_centre: Geographical longitude of the center of the municipality.
+
+## main features of the covariates:
+
+The first part is the data type with some example data of each covariates, and the second part is some basic statistical quantity of each covariates.
+```{r}
+# View the structure of the dataset
+str(data)
+
+# Get summary statistics
+summary(data)
+```
+## Check missing data
+```{r}
+# Count missing values in each column
+sapply(data, function(x) sum(is.na(x)))
+```
+As we can see, there are no missing data in the file
+
+## Check outliers
+```{r}
+# List of columns to plot
+columns_to_plot <- c("POPSDC99", "LOG", "LOGVAC", "STRATLOG", "surf_m2", "lat_centre", "lon_centre")
+
+par(mfrow=c(7, 1), mar=c(2, 4, 2, 1), las=1)
+
+
+for (col in columns_to_plot) {
+  
+  boxplot(data[[col]], main=paste(col), horizontal=TRUE, las=1, xlab="")
+}
+
+par(mfrow=c(1, 1), mar=c(5, 4, 4, 2) + 0.1)
+```
+Here I made the boxplot for the 7 numerical columns(excluding the code or index columns) to check their outliers.
+It shows that there are some outliers in columns [POPSDC99, LOG, LOGVAC, surf_m2] which are much higher than their mean value.
+
+# Question 2
+```{r}
+# Calculate 'Vacant_rate' as LOGVAC divided by LOG
+data$Vacant_rate <- data$LOGVAC / data$LOG
+data$more_than_10 <- ifelse(data$Vacant_rate > 0.1, 1, 0)
+
+head(data$Vacant_rate)
+head(data$more_than_10)
+```
+## 2.a
+```{r}
+# true mean
+true_mean = mean(data$more_than_10)
+
+set.seed(123) # For reproducibility
+N <- length(data$more_than_10) # Population size
+n <- 100 # Desired sample size
+p <- n / N
+num_simulations <- 10000
+
+# Initialize vectors to store
+mean_estimates_Srswor <- numeric(num_simulations)
+mean_estimates_Bernoulli <- numeric(num_simulations)
+mean_estimates_Systematic <- numeric(num_simulations)
+
+square_error_Srswor <- numeric(num_simulations)
+square_error_Bernoulli <- numeric(num_simulations)
+square_error_Systematic <- numeric(num_simulations)
+
+for (i in 1:num_simulations) {
+  # SRSWOR Sampling
+  sample_Srswor <- sample(data$more_than_10, n, replace = FALSE)
+  mean_estimates_Srswor[i] <- mean(sample_Srswor)
+  square_error_Srswor[i] <- (mean(sample_Srswor) - true_mean)^2
+  
+  # Bernoulli Sampling
+  indices_Bernoulli <- rbinom(N, 1, p) == 1
+  sample_Bernoulli <- data$more_than_10[indices_Bernoulli]
+  ht_estimate_Bernoulli <- sum(sample_Bernoulli / p) / N
+  mean_estimates_Bernoulli[i] <- ht_estimate_Bernoulli
+  square_error_Bernoulli[i] <- (mean(ht_estimate_Bernoulli) - true_mean)^2
+  
+  # Systematic Sampling
+  start <- sample(1:(N/n), 1)
+  indices_Systematic <- seq(from = start, by = N/n, length.out = n)
+  sample_Systematic <- data$more_than_10[indices_Systematic]
+  mean_estimates_Systematic[i] <- mean(sample_Systematic)
+  square_error_Systematic[i] <- (mean(sample_Systematic) - true_mean)^2
+}
+
+
+mean_HT_estimator_Srswor <- mean(mean_estimates_Srswor)
+mean_HT_estimator_Bernoulli <- mean(mean_estimates_Bernoulli)
+mean_HT_estimator_Systematic <- mean(mean_estimates_Systematic)
+
+MSE_Srswor <- mean(square_error_Srswor)
+MSE_Bernoulli <- mean(square_error_Bernoulli)
+MSE_Systematic <- mean(square_error_Systematic)
+
+# cat("population mean:", true_mean, "\n\n")
+# cat("HT for SRSWOR:", mean_HT_estimator_Srswor, "\n")
+# cat("HT for Bernoulli:", mean_HT_estimator_Bernoulli, "\n")
+# cat("HT for Systematic:", mean_HT_estimator_Systematic, "\n\n")
+
+# cat("bias for SRSWOR:", true_mean - mean_HT_estimator_Srswor, "\n")
+# cat("bias for Bernoulli:", true_mean - mean_HT_estimator_Bernoulli, "\n")
+# cat("bias for Systematic:", true_mean - mean_HT_estimator_Systematic, "\n\n")
+
+cat("MSE for SRSWOR:", MSE_Srswor, "\n")
+cat("MSE for Bernoulli:", MSE_Bernoulli, "\n")
+cat("MSE for Systematic:", MSE_Systematic, "\n")
+```
+The MSE of each sampling method is calculated as:
+
+$\text{MSE} = \frac{1}{R} \sum_{i=1}^{R} (\hat{\mu}_{\pi,i} - \mu)^2$
+
+As shown by the MSE result from the Monte-Carlo simulation.
+The Simple Random Sampling Without Replacement (SRSWOR) strategy is the best among the three in this population, as it has the lowest mean square error (MSE) of 0.00129213, indicating the highest estimation accuracy among the three sampling approach.
+
+## 2.b
+
+We implement the SRSWOR approach as suggested above to randomly select a sample, and use the HT estimator to estimate the proportion of cities having more than 10% of vacant wellings which is approximately 20%. This is very close to the true population proportion 20.4%
+```{r}
+# true mean
+true_mean = mean(data$more_than_10)
+
+set.seed(123) # Ensure reproducibility
+
+# SRSWOR
+sample_Srswor <- sample(data$more_than_10, size = 100, replace = FALSE)
+
+HT_estimate = mean(sample_Srswor)
+
+cat("population proportion:", true_mean, "\n")
+cat("estimated proportion:", HT_estimate)
+```
+
+# Question 3
+
+## 3.a
+```{r}
+# true mean
+true_mean = mean(data$LOGVAC)
+
+set.seed(123) # For reproducibility
+N <- length(data$LOGVAC) # Population size
+n <- 100 # Desired sample size
+p <- n / N
+num_simulations <- 10000
+
+# Initialize vectors to store
+mean_estimates_Srswor <- numeric(num_simulations)
+mean_estimates_Bernoulli <- numeric(num_simulations)
+mean_estimates_Systematic <- numeric(num_simulations)
+
+square_error_Srswor <- numeric(num_simulations)
+square_error_Bernoulli <- numeric(num_simulations)
+square_error_Systematic <- numeric(num_simulations)
+
+for (i in 1:num_simulations) {
+  # SRSWOR Sampling
+  sample_Srswor <- sample(data$LOGVAC, n, replace = FALSE)
+  mean_estimates_Srswor[i] <- mean(sample_Srswor)
+  square_error_Srswor[i] <- (mean(sample_Srswor) - true_mean)^2
+  
+  # Bernoulli Sampling
+  indices_Bernoulli <- rbinom(N, 1, p) == 1
+  sample_Bernoulli <- data$LOGVAC[indices_Bernoulli]
+  ht_estimate_Bernoulli <- sum(sample_Bernoulli / p) / N
+  mean_estimates_Bernoulli[i] <- ht_estimate_Bernoulli
+  square_error_Bernoulli[i] <- (mean(ht_estimate_Bernoulli) - true_mean)^2
+  
+  # Systematic Sampling
+  start <- sample(1:(N/n), 1)
+  indices_Systematic <- seq(from = start, by = N/n, length.out = n)
+  sample_Systematic <- data$LOGVAC[indices_Systematic]
+  mean_estimates_Systematic[i] <- mean(sample_Systematic)
+  square_error_Systematic[i] <- (mean(sample_Systematic) - true_mean)^2
+}
+
+
+mean_HT_estimator_Srswor <- mean(mean_estimates_Srswor)
+mean_HT_estimator_Bernoulli <- mean(mean_estimates_Bernoulli)
+mean_HT_estimator_Systematic <- mean(mean_estimates_Systematic)
+
+MSE_Srswor <- mean(square_error_Srswor)
+MSE_Bernoulli <- mean(square_error_Bernoulli)
+MSE_Systematic <- mean(square_error_Systematic)
+
+# cat("population mean:", true_mean, "\n\n")
+# cat("HT for SRSWOR:", mean_HT_estimator_Srswor, "\n")
+# cat("HT for Bernoulli:", mean_HT_estimator_Bernoulli, "\n")
+# cat("HT for Systematic:", mean_HT_estimator_Systematic, "\n\n")
+# 
+# cat("bias for SRSWOR:", true_mean - mean_HT_estimator_Srswor, "\n")
+# cat("bias for Bernoulli:", true_mean - mean_HT_estimator_Bernoulli, "\n")
+# cat("bias for Systematic:", true_mean - mean_HT_estimator_Systematic, "\n\n")
+
+cat("MSE for SRSWOR:", MSE_Srswor, "\n")
+cat("MSE for Bernoulli:", MSE_Bernoulli, "\n")
+cat("MSE for Systematic:", MSE_Systematic, "\n")
+```
+The MSE of each sampling method is calculated as:
+
+$\text{MSE} = \frac{1}{R} \sum_{i=1}^{R} (\hat{\mu}_{\pi,i} - \mu)^2$
+
+As shown by the MSE result from the Monte-Carlo simulation.
+The Simple Random Sampling Without Replacement (SRSWOR) strategy is the best among the three in this population, as it has the lowest mean square error (MSE) of 9.00325, indicating the highest estimation accuracy among the three sampling approach.
+
+## 3.b
+```{r}
+# sort the data
+data_new <- data[order(data$LOG), ]
+
+# View
+head(data_new)
+```
+```{r}
+# true mean
+true_mean = mean(data_new$LOGVAC)
+
+set.seed(123) # For reproducibility
+N <- length(data_new$LOGVAC) # Population size
+n <- 100 # Expected sample size
+p <- n / N
+num_simulations <- 10000
+
+# Initialize vectors to store
+mean_estimates_Srswor <- numeric(num_simulations)
+mean_estimates_Bernoulli <- numeric(num_simulations)
+mean_estimates_Systematic <- numeric(num_simulations)
+
+square_error_Srswor <- numeric(num_simulations)
+square_error_Bernoulli <- numeric(num_simulations)
+square_error_Systematic <- numeric(num_simulations)
+
+for (i in 1:num_simulations) {
+  # SRSWOR Sampling
+  sample_Srswor <- sample(data_new$LOGVAC, n, replace = FALSE)
+  mean_estimates_Srswor[i] <- mean(sample_Srswor)
+  square_error_Srswor[i] <- (mean(sample_Srswor) - true_mean)^2
+  
+  # Bernoulli Sampling
+  indices_Bernoulli <- rbinom(N, 1, p) == 1
+  sample_Bernoulli <- data_new$LOGVAC[indices_Bernoulli]
+  ht_estimate_Bernoulli <- sum(sample_Bernoulli / p) / N
+  mean_estimates_Bernoulli[i] <- ht_estimate_Bernoulli
+  square_error_Bernoulli[i] <- (mean(ht_estimate_Bernoulli) - true_mean)^2
+  
+  # Systematic Sampling
+  start <- sample(1:(N/n), 1)
+  indices_Systematic <- seq(from = start, by = N/n, length.out = n)
+  sample_Systematic <- data_new$LOGVAC[indices_Systematic]
+  mean_estimates_Systematic[i] <- mean(sample_Systematic)
+  square_error_Systematic[i] <- (mean(sample_Systematic) - true_mean)^2
+}
+
+
+mean_HT_estimator_Srswor <- mean(mean_estimates_Srswor)
+mean_HT_estimator_Bernoulli <- mean(mean_estimates_Bernoulli)
+mean_HT_estimator_Systematic <- mean(mean_estimates_Systematic)
+
+MSE_Srswor <- mean(square_error_Srswor)
+MSE_Bernoulli <- mean(square_error_Bernoulli)
+MSE_Systematic <- mean(square_error_Systematic)
+
+# cat("population mean:", true_mean, "\n\n")
+# cat("HT for SRSWOR:", mean_HT_estimator_Srswor, "\n")
+# cat("HT for Bernoulli:", mean_HT_estimator_Bernoulli, "\n")
+# cat("HT for Systematic:", mean_HT_estimator_Systematic, "\n\n")
+# 
+# cat("bias for SRSWOR:", true_mean - mean_HT_estimator_Srswor, "\n")
+# cat("bias for Bernoulli:", true_mean - mean_HT_estimator_Bernoulli, "\n")
+# cat("bias for Systematic:", true_mean - mean_HT_estimator_Systematic, "\n\n")
+
+cat("MSE for SRSWOR:", MSE_Srswor, "\n")
+cat("MSE for Bernoulli:", MSE_Bernoulli, "\n")
+cat("MSE for Systematic:", MSE_Systematic, "\n")
+```
+As shown by the MSE result from the Monte-Carlo simulation using the sorted data this time.
+The Systematic Sampling strategy is the best among the three in this population, as it has the lowest mean square error (MSE) of 2.990881, indicating the highest estimation accuracy among the three sampling approach.
+
+## 3.c
+
+- Yes, the results(MSE) differ significantly after sorting the population by the Number of dwellings for Systematic sampling design. 
+
+- The efficiencies of the three strategies changed, with Systematic sampling showing a substantial improvement in accuracy, evidenced by the lowest mean square error (MSE) after sorting. 
+
+- This change highlights the impact of population order on sampling strategies, particularly benefiting Systematic sampling due to its reliance on the order for selection. Thus given the mechanics of the sampling methods, the improvement in Systematic Sampling's efficiency after sorting the population by a relevant characteristic can be seen as predictable. Sorting introduces a form of order that Systematic Sampling can exploit, leading to more representative samples and MSE. 
+
+- from the perspective of ANOVA decomposition of systematic sampling: "Total variations" = "Between group variations" + "Within group variations". Sorting increase the Within group variations. Since Total variations doesn't change. Between group variations reduces which also leads to the decrease of MSE.
+
+
+
+
+
+
+
+
+
